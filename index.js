@@ -23,7 +23,7 @@ const server = http.createServer((req, res) => {
     res.end('Telegram Userbot is running!');
 });
 
-server.listen(PROXY_PORT, () => {
+server.listen(PROXY_PORT, '0.0.0.0', () => {
     console.log(`Dummy Healthcheck Server listening on port ${PROXY_PORT}`);
 });
 // ------------------------------------------
@@ -58,7 +58,7 @@ if (process.env.PROXY_URL) {
 (async () => {
     console.log('Starting NLP setup...');
     await setupNlp();
-    
+
     console.log('Loading interactive Telegram Client...');
     const clientOptions = {
         connectionRetries: 5,
@@ -67,7 +67,7 @@ if (process.env.PROXY_URL) {
         clientOptions.proxy = proxyConfig;
         console.log('GramJS MTProto Proxy Configured.');
     }
-    
+
     const client = new TelegramClient(stringSession, apiId, apiHash, clientOptions);
 
     await client.start({
@@ -101,12 +101,12 @@ if (process.env.PROXY_URL) {
             if (repliedMsg) {
                 // Check if the replied message was sent by the userbot
                 if (repliedMsg.out) {
-                     isValidTrigger = true;
+                    isValidTrigger = true;
                 } else {
-                     const me = await client.getMe();
-                     if (repliedMsg.senderId && repliedMsg.senderId.valueOf() === me.id.valueOf()) {
-                         isValidTrigger = true;
-                     }
+                    const me = await client.getMe();
+                    if (repliedMsg.senderId && repliedMsg.senderId.valueOf() === me.id.valueOf()) {
+                        isValidTrigger = true;
+                    }
                 }
             }
         } else if (isGreeting) {
@@ -121,11 +121,11 @@ if (process.env.PROXY_URL) {
         // Valid trigger!
         const sender = await message.getSender();
         const chat = await message.getChat();
-        
+
         // Save interactions to SQLite
         const username = sender?.username || sender?.firstName || 'Unknown';
         const groupTitle = chat?.title || 'Unknown Group';
-        
+
         recordInteraction(
             sender?.id ? sender.id.valueOf() : 0,
             username,
@@ -139,60 +139,60 @@ if (process.env.PROXY_URL) {
         // Constraint 3: If user replies with a sticker, we reply with a sticker
         if (message.sticker || message.document?.mimeType?.includes('image/webp') || message.document?.mimeType?.includes('application/x-tgsticker')) {
             console.log(`[Group] ${username} replied with a sticker! Choosing sticker to reply...`);
-            
+
             // Set Choosing Sticker Action
             await client.invoke(new Api.messages.SetTyping({
                 peer: chat.id,
                 action: new Api.SendMessageChooseStickerAction()
             }));
-            
+
             await sleep(2000); // Wait 2s to simulate finding a sticker
-            
+
             if (stickerPacks.length > 0) {
-                 try {
-                     // Try to fetch a sticker from the configured packs
-                     // This is a simplified logic. Properly, one would fetch the pack, get a doc, and send it.
-                     // GramJS can send stickers if provided a valid input document or bot API file ID.
-                     // For a userbot, we can send a random sticker from a saved pack.
-                     
-                     // Get all installed stickers (simplified hack: just send a thumbs up or get recent)
-                     const recentStickers = await client.invoke(new Api.messages.GetRecentStickers({
+                try {
+                    // Try to fetch a sticker from the configured packs
+                    // This is a simplified logic. Properly, one would fetch the pack, get a doc, and send it.
+                    // GramJS can send stickers if provided a valid input document or bot API file ID.
+                    // For a userbot, we can send a random sticker from a saved pack.
+
+                    // Get all installed stickers (simplified hack: just send a thumbs up or get recent)
+                    const recentStickers = await client.invoke(new Api.messages.GetRecentStickers({
                         attached: false
-                     }));
-                     
-                     if (recentStickers && recentStickers.stickers.length > 0) {
-                         const randomSticker = recentStickers.stickers[Math.floor(Math.random() * recentStickers.stickers.length)];
-                         await client.sendMessage(chat.id, {
-                             file: randomSticker,
-                             replyTo: message.id 
-                         });
-                         return;
-                     }
-                 } catch (err) {
-                     console.log('Error fetching/sending sticker:', err.message);
-                 }
+                    }));
+
+                    if (recentStickers && recentStickers.stickers.length > 0) {
+                        const randomSticker = recentStickers.stickers[Math.floor(Math.random() * recentStickers.stickers.length)];
+                        await client.sendMessage(chat.id, {
+                            file: randomSticker,
+                            replyTo: message.id
+                        });
+                        return;
+                    }
+                } catch (err) {
+                    console.log('Error fetching/sending sticker:', err.message);
+                }
             } else {
-                 console.log('No sticker packs configured or fetch failed. Sending text fallback.');
+                console.log('No sticker packs configured or fetch failed. Sending text fallback.');
             }
-        } 
-        
+        }
+
         // Text NLP Logic
         if (message.text) {
-             console.log(`[Group] ${username} said: "${message.text}"`);
-             
-             // Set Typing Action
-             await client.invoke(new Api.messages.SetTyping({
+            console.log(`[Group] ${username} said: "${message.text}"`);
+
+            // Set Typing Action
+            await client.invoke(new Api.messages.SetTyping({
                 peer: chat.id,
                 action: new Api.SendMessageTypingAction()
             }));
-            
+
             const replyData = await getReply(message.text);
             const actualText = replyData.text; // get Reply now returns { text, isMatched }
-            
+
             // Simulate typing delay based on string length (approx 100ms per char)
-            const typingTime = Math.min(Math.max(actualText.length * 100, 1000), 5000); 
+            const typingTime = Math.min(Math.max(actualText.length * 100, 1000), 5000);
             await sleep(typingTime);
-            
+
             await client.sendMessage(chat.id, {
                 message: actualText,
                 replyTo: message.id
@@ -200,7 +200,7 @@ if (process.env.PROXY_URL) {
         }
 
     }, new NewMessage({}));
-    
+
     console.log('Userbot listening for replies in groups...');
 
 })();
