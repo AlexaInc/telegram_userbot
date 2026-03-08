@@ -1,0 +1,22 @@
+{
+  "name": "userbot-understanding-tg",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@nlpjs/basic": "^5.0.0-alpha.5",
+    "dotenv": "^17.3.1",
+    "global-agent": "^4.1.2",
+    "https-proxy-agent": "^7.0.6",
+    "input": "^1.0.1",
+    "socks-proxy-agent": "^8.0.5",
+    "sqlite3": "^5.1.7",
+    "telegram": "^2.26.22"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+.env
+*nlp*.md
+*nlp*.txt
+*.docx
+*.pdf
+*.zip
+*.sql
+*.sqlite
+package-lock.json
