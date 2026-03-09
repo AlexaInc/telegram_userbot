@@ -170,10 +170,13 @@ if (process.env.PROXY_URL) {
         }
         // -----------------------------------
 
-        // Constraint 2: Trigger if it's a specific Reply TO the userbot OR if it's a generic greeting
+        // Constraint 2: Trigger if it's a generic greeting OR if it's a specific Reply TO the userbot
         let isValidTrigger = false;
 
-        if (message.isReply) {
+        if (isGreeting) {
+            // Trigger on generic greetings sent to the group, even if not replied directly
+            isValidTrigger = true;
+        } else if (message.isReply) {
             const repliedMsg = await message.getReplyMessage();
             if (repliedMsg) {
                 const repliedSenderId = repliedMsg.senderId?.valueOf()?.toString();
@@ -183,9 +186,6 @@ if (process.env.PROXY_URL) {
                     isValidTrigger = true;
                 }
             }
-        } else if (isGreeting) {
-            // Trigger on generic greetings sent to the group, even if not replied directly
-            isValidTrigger = true;
         }
 
         if (!isValidTrigger) {
