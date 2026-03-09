@@ -193,21 +193,20 @@ if (process.env.PROXY_URL) {
         if (message.isReply && message.text) {
             try {
                 const repliedMsg = await message.getReplyMessage();
-                // Ensure both messages exist, both are text, and the replied message is from a real user (not a bot)
-                if (repliedMsg && repliedMsg.text && !repliedMsg.out) {
+                // Ensure both messages exist, both are text, and the replied message is from a real user (not necessarily not us)
+                if (repliedMsg && repliedMsg.text) {
                     const sender = await repliedMsg.getSender();
+                    // We only learn from human interactions, not bot outputs
                     if (sender && !sender.bot) {
                         const utterance = repliedMsg.text.trim();
                         const response = message.text.trim();
 
-                        // Ignore extremely long paragraphs or 1-word generic replies that might ruin training
-                        if (utterance.length > 3 && utterance.length < 100 && response.length > 2 && response.length < 150) {
+                        if (utterance.length > 0 && response.length > 0) {
                             console.log(`[Self-Learning] Captured mapping -> Utterance: "${utterance}" | Response: "${response}"`);
 
-                            // Save to SQLite (Don't auto-train anymore)
+                            // Save to SQLite (Don't auto-train anymore, wait for /train)
                             const intentId = `learned.${Date.now()}`;
-                            const savedId = await saveLearnedPair(intentId, utterance, response);
-                            // await trainDynamicIntent(intentId, utterance, response); // Removed per user request
+                            await saveLearnedPair(intentId, utterance, response);
                         }
                     }
                 }
