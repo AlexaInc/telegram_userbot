@@ -1,7 +1,8 @@
-const { Octokit } = require('octokit');
 const { loadLearnedKnowledge } = require('./db.js');
 
 async function performBackup() {
+    // Dynamic import for Octokit (since it is an ESM module)
+    const { Octokit } = await import('octokit');
     const token = process.env.GITHUB_TOKEN;
     const owner = 'AlexaInc';
     const repo = 'nlpjsbrain';
