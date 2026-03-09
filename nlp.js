@@ -1,8 +1,18 @@
 const { containerBootstrap } = require('@nlpjs/core');
 const { Nlp } = require('@nlpjs/nlp');
 const { LangEn } = require('@nlpjs/lang-en');
+const { singlishToUnicode } = require('sinhala-text-converters');
+const { loadLearnedKnowledge } = require('./db.js');
 
 let nlpManager;
+
+function addDoc(lang, text, intent) {
+    nlpManager.addDocument(lang, text, intent);
+    const unicodeText = singlishToUnicode(text);
+    if (unicodeText && unicodeText !== text) {
+        nlpManager.addDocument(lang, unicodeText, intent);
+    }
+}
 
 async function setupNlp() {
     const container = await containerBootstrap();
@@ -13,262 +23,277 @@ async function setupNlp() {
     nlpManager.settings.autoSave = false;
     nlpManager.addLanguage('en');
 
+    // --- Dynamic Self-Learning Loop Loader ---
+    try {
+        const learnedRows = await loadLearnedKnowledge();
+        if (learnedRows && learnedRows.length > 0) {
+            console.log(`Loading ${learnedRows.length} User-Taught conversation flows...`);
+            for (const row of learnedRows) {
+                addDoc('en', row.utterance, row.intent);
+                nlpManager.addAnswer('en', row.intent, row.response);
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load dynamic knowledge from SQLite', err);
+    }
+    // ------------------------------------------
+
     // English Greetings
-    nlpManager.addDocument('en', 'hi', 'greetings.hello');
-    nlpManager.addDocument('en', 'hello', 'greetings.hello');
-    nlpManager.addDocument('en', 'hey', 'greetings.hello');
-    nlpManager.addDocument('en', 'yo', 'greetings.hello');
+    addDoc('en', 'hi', 'greetings.hello');
+    addDoc('en', 'hello', 'greetings.hello');
+    addDoc('en', 'hey', 'greetings.hello');
+    addDoc('en', 'yo', 'greetings.hello');
 
     // Sinhala Greetings (phonetic English) & Variations
-    nlpManager.addDocument('en', 'halo', 'greetings.hello');
-    nlpManager.addDocument('en', 'ayubowan', 'greetings.sinhala');
-    nlpManager.addDocument('en', 'kohomada', 'greetings.howareyou');
-    nlpManager.addDocument('en', 'hodaida', 'greetings.howareyou');
-    nlpManager.addDocument('en', 'hodaida oya', 'greetings.howareyou');
-    nlpManager.addDocument('en', 'hodai', 'greetings.fine');
-    nlpManager.addDocument('en', 'hodayi', 'greetings.fine');
-    nlpManager.addDocument('en', 'hodayi oyt kohomd', 'greetings.fine_and_you');
-    nlpManager.addDocument('en', 'hodai oyata kohomada', 'greetings.fine_and_you');
-    
+    addDoc('en', 'halo', 'greetings.hello');
+    addDoc('en', 'ayubowan', 'greetings.sinhala');
+    addDoc('en', 'kohomada', 'greetings.howareyou');
+    addDoc('en', 'hodaida', 'greetings.howareyou');
+    addDoc('en', 'hodaida oya', 'greetings.howareyou');
+    addDoc('en', 'hodai', 'greetings.fine');
+    addDoc('en', 'hodayi', 'greetings.fine');
+    addDoc('en', 'hodayi oyt kohomd', 'greetings.fine_and_you');
+    addDoc('en', 'hodai oyata kohomada', 'greetings.fine_and_you');
+
     // Compliments
-    nlpManager.addDocument('en', 'oya lassanai', 'greetings.compliment');
-    nlpManager.addDocument('en', 'maru', 'greetings.compliment');
-    nlpManager.addDocument('en', 'patta lassanai', 'greetings.compliment');
-    nlpManager.addDocument('en', 'you are beautiful', 'greetings.compliment');
-    nlpManager.addDocument('en', 'you are hot', 'greetings.compliment');
-    nlpManager.addDocument('en', 'sexy', 'greetings.compliment');
+    addDoc('en', 'oya lassanai', 'greetings.compliment');
+    addDoc('en', 'maru', 'greetings.compliment');
+    addDoc('en', 'patta lassanai', 'greetings.compliment');
+    addDoc('en', 'you are beautiful', 'greetings.compliment');
+    addDoc('en', 'you are hot', 'greetings.compliment');
+    addDoc('en', 'sexy', 'greetings.compliment');
 
     // General Chat / Flirty
-    nlpManager.addDocument('en', 'who are you', 'agent.whoami');
-    nlpManager.addDocument('en', 'kauda oya', 'agent.whoami');
-    nlpManager.addDocument('en', 'oya kageda', 'agent.whoami');
-    nlpManager.addDocument('en', 'i love you', 'agent.love');
-    nlpManager.addDocument('en', 'adarei', 'agent.love');
-    nlpManager.addDocument('en', 'man oyata adarei', 'agent.love');
-    nlpManager.addDocument('en', 'kammali', 'agent.boring');
-    nlpManager.addDocument('en', 'boring', 'agent.boring');
+    addDoc('en', 'who are you', 'agent.whoami');
+    addDoc('en', 'kauda oya', 'agent.whoami');
+    addDoc('en', 'oya kageda', 'agent.whoami');
+    addDoc('en', 'i love you', 'agent.love');
+    addDoc('en', 'adarei', 'agent.love');
+    addDoc('en', 'man oyata adarei', 'agent.love');
+    addDoc('en', 'kammali', 'agent.boring');
+    addDoc('en', 'boring', 'agent.boring');
 
     // Missing You / Flirty Questions
-    nlpManager.addDocument('en', 'miss you', 'agent.missyou');
-    nlpManager.addDocument('en', 'matath miss', 'agent.missyou');
-    nlpManager.addDocument('en', 'paalui', 'agent.missyou');
-    nlpManager.addDocument('en', 'cuddle', 'agent.cuddle');
-    nlpManager.addDocument('en', 'thurulu wenna', 'agent.cuddle');
-    nlpManager.addDocument('en', 'nidida', 'agent.sleep');
-    nlpManager.addDocument('en', 'kawda katha karanne', 'agent.calling');
-    nlpManager.addDocument('en', 'kauda enne', 'agent.coming');
-    nlpManager.addDocument('en', 'kiss', 'agent.kiss');
-    nlpManager.addDocument('en', 'umma', 'agent.kiss');
-    nlpManager.addDocument('en', 'lip kiss', 'agent.lipkiss');
-    nlpManager.addDocument('en', 'thorala', 'agent.lipkiss');
-    
+    addDoc('en', 'miss you', 'agent.missyou');
+    addDoc('en', 'matath miss', 'agent.missyou');
+    addDoc('en', 'paalui', 'agent.missyou');
+    addDoc('en', 'cuddle', 'agent.cuddle');
+    addDoc('en', 'thurulu wenna', 'agent.cuddle');
+    addDoc('en', 'nidida', 'agent.sleep');
+    addDoc('en', 'kawda katha karanne', 'agent.calling');
+    addDoc('en', 'kauda enne', 'agent.coming');
+    addDoc('en', 'kiss', 'agent.kiss');
+    addDoc('en', 'umma', 'agent.kiss');
+    addDoc('en', 'lip kiss', 'agent.lipkiss');
+    addDoc('en', 'thorala', 'agent.lipkiss');
+
     // Naughty / Spicy Chat
-    nlpManager.addDocument('en', 'naughty', 'agent.naughty');
-    nlpManager.addDocument('en', 'hitha gattada', 'agent.naughty');
-    nlpManager.addDocument('en', 'amuthu unada', 'agent.naughty');
-    nlpManager.addDocument('en', 'maru aga', 'agent.hotbody');
-    nlpManager.addDocument('en', 'kellage age', 'agent.hotbody');
-    nlpManager.addDocument('en', 'curves', 'agent.hotbody');
-    nlpManager.addDocument('en', 'lassana aga', 'agent.hotbody');
-    nlpManager.addDocument('en', 'bath room ekeda', 'agent.bathroom');
-    nlpManager.addDocument('en', 'wash dannada', 'agent.bathroom');
-    
+    addDoc('en', 'naughty', 'agent.naughty');
+    addDoc('en', 'hitha gattada', 'agent.naughty');
+    addDoc('en', 'amuthu unada', 'agent.naughty');
+    addDoc('en', 'maru aga', 'agent.hotbody');
+    addDoc('en', 'kellage age', 'agent.hotbody');
+    addDoc('en', 'curves', 'agent.hotbody');
+    addDoc('en', 'lassana aga', 'agent.hotbody');
+    addDoc('en', 'bath room ekeda', 'agent.bathroom');
+    addDoc('en', 'wash dannada', 'agent.bathroom');
+
     // Commands / Teasing
-    nlpManager.addDocument('en', 'enna', 'agent.comehere');
-    nlpManager.addDocument('en', 'langata enna', 'agent.comehere');
-    nlpManager.addDocument('en', 'mata one', 'agent.wantyou');
-    nlpManager.addDocument('en', 'can i get you', 'agent.wantyou');
-    nlpManager.addDocument('en', 'oyawa one', 'agent.wantyou');
+    addDoc('en', 'enna', 'agent.comehere');
+    addDoc('en', 'langata enna', 'agent.comehere');
+    addDoc('en', 'mata one', 'agent.wantyou');
+    addDoc('en', 'can i get you', 'agent.wantyou');
+    addDoc('en', 'oyawa one', 'agent.wantyou');
 
     // Real Life / Everyday Checks (Super Realistic)
-    nlpManager.addDocument('en', 'kewada', 'agent.eaten');
-    nlpManager.addDocument('en', 'kala da inne', 'agent.eaten');
-    nlpManager.addDocument('en', 'breakfast eka gaththada', 'agent.eaten');
-    nlpManager.addDocument('en', 'lunch ekak kewa', 'agent.eaten');
-    nlpManager.addDocument('en', 'monada karanne', 'agent.whatdoing');
-    nlpManager.addDocument('en', 'koheda inne', 'agent.whereareyou');
-    nlpManager.addDocument('en', 'gedarada', 'agent.athome');
-    nlpManager.addDocument('en', 'weda set da', 'agent.working');
-    nlpManager.addDocument('en', 'busy da', 'agent.busy');
+    addDoc('en', 'kewada', 'agent.eaten');
+    addDoc('en', 'kala da inne', 'agent.eaten');
+    addDoc('en', 'breakfast eka gaththada', 'agent.eaten');
+    addDoc('en', 'lunch ekak kewa', 'agent.eaten');
+    addDoc('en', 'monada karanne', 'agent.whatdoing');
+    addDoc('en', 'koheda inne', 'agent.whereareyou');
+    addDoc('en', 'gedarada', 'agent.athome');
+    addDoc('en', 'weda set da', 'agent.working');
+    addDoc('en', 'busy da', 'agent.busy');
 
     // Moods / Complaining (Girlfriend vibes)
-    nlpManager.addDocument('en', 'tharaha da', 'agent.angry');
-    nlpManager.addDocument('en', 'awulda', 'agent.angry');
-    nlpManager.addDocument('en', 'monawada awula', 'agent.sad');
-    nlpManager.addDocument('en', 'dukai', 'agent.sad');
-    nlpManager.addDocument('en', 'mata asaneepai', 'agent.sick');
-    nlpManager.addDocument('en', 'olua kakkuma', 'agent.sick');
-    nlpManager.addDocument('en', 'pissi', 'agent.crazy');
-    nlpManager.addDocument('en', 'modi', 'agent.crazy');
-    
+    addDoc('en', 'tharaha da', 'agent.angry');
+    addDoc('en', 'awulda', 'agent.angry');
+    addDoc('en', 'monawada awula', 'agent.sad');
+    addDoc('en', 'dukai', 'agent.sad');
+    addDoc('en', 'mata asaneepai', 'agent.sick');
+    addDoc('en', 'olua kakkuma', 'agent.sick');
+    addDoc('en', 'pissi', 'agent.crazy');
+    addDoc('en', 'modi', 'agent.crazy');
+
     // Naughty Additions (Hyper Realistic Flirting)
-    nlpManager.addDocument('en', 'photo ekak ewanna', 'agent.sendpic');
-    nlpManager.addDocument('en', 'pics', 'agent.sendpic');
-    nlpManager.addDocument('en', 'nida gaththada', 'agent.didntsleep');
-    nlpManager.addDocument('en', 'asai da', 'agent.doyoulike');
-    nlpManager.addDocument('en', 'kollek innawada', 'agent.bf');
-    nlpManager.addDocument('en', 'single da', 'agent.bf');
-    nlpManager.addDocument('en', 'kellok', 'agent.jealous');
+    addDoc('en', 'photo ekak ewanna', 'agent.sendpic');
+    addDoc('en', 'pics', 'agent.sendpic');
+    addDoc('en', 'nida gaththada', 'agent.didntsleep');
+    addDoc('en', 'asai da', 'agent.doyoulike');
+    addDoc('en', 'kollek innawada', 'agent.bf');
+    addDoc('en', 'single da', 'agent.bf');
+    addDoc('en', 'kellok', 'agent.jealous');
 
     // Daily Greetings (Morning/Night)
-    nlpManager.addDocument('en', 'good morning', 'greetings.morning');
-    nlpManager.addDocument('en', 'udeta', 'greetings.morning');
-    nlpManager.addDocument('en', 'morning', 'greetings.morning');
-    nlpManager.addDocument('en', 'good night', 'greetings.night');
-    nlpManager.addDocument('en', 'night', 'greetings.night');
-    nlpManager.addDocument('en', 'sweet dreams', 'greetings.night');
-    nlpManager.addDocument('en', 'bs', 'greetings.night');
-    nlpManager.addDocument('en', 'budu saranai', 'greetings.night');
+    addDoc('en', 'good morning', 'greetings.morning');
+    addDoc('en', 'udeta', 'greetings.morning');
+    addDoc('en', 'morning', 'greetings.morning');
+    addDoc('en', 'good night', 'greetings.night');
+    addDoc('en', 'night', 'greetings.night');
+    addDoc('en', 'sweet dreams', 'greetings.night');
+    addDoc('en', 'bs', 'greetings.night');
+    addDoc('en', 'budu saranai', 'greetings.night');
 
     // Reactions to insults / bad words (Playful/Defensive)
-    nlpManager.addDocument('en', 'paka', 'agent.insult');
-    nlpManager.addDocument('en', 'huththa', 'agent.insult');
-    nlpManager.addDocument('en', 'vesi', 'agent.insult');
-    nlpManager.addDocument('en', 'ponnaya', 'agent.insult');
-    nlpManager.addDocument('en', 'kari', 'agent.insult');
-    nlpManager.addDocument('en', 'moda', 'agent.insult');
-    nlpManager.addDocument('en', 'palayan', 'agent.go_away');
-    nlpManager.addDocument('en', 'gihin nidaganin', 'agent.go_away');
+    addDoc('en', 'paka', 'agent.insult');
+    addDoc('en', 'huththa', 'agent.insult');
+    addDoc('en', 'vesi', 'agent.insult');
+    addDoc('en', 'ponnaya', 'agent.insult');
+    addDoc('en', 'kari', 'agent.insult');
+    addDoc('en', 'moda', 'agent.insult');
+    addDoc('en', 'palayan', 'agent.go_away');
+    addDoc('en', 'gihin nidaganin', 'agent.go_away');
 
     // Jokes / Laughter
-    nlpManager.addDocument('en', 'joke ekak', 'agent.joke');
-    nlpManager.addDocument('en', 'hina yanney ne', 'agent.joke_reaction');
-    nlpManager.addDocument('en', 'haha', 'agent.laugh');
-    nlpManager.addDocument('en', 'hehe', 'agent.laugh');
-    nlpManager.addDocument('en', 'lol', 'agent.laugh');
+    addDoc('en', 'joke ekak', 'agent.joke');
+    addDoc('en', 'hina yanney ne', 'agent.joke_reaction');
+    addDoc('en', 'haha', 'agent.laugh');
+    addDoc('en', 'hehe', 'agent.laugh');
+    addDoc('en', 'lol', 'agent.laugh');
 
     // Food / Drinks
-    nlpManager.addDocument('en', 'tea biwwada', 'agent.tea');
-    nlpManager.addDocument('en', 'coffee', 'agent.tea');
-    nlpManager.addDocument('en', 'koththu', 'agent.food_taste');
-    nlpManager.addDocument('en', 'bite', 'agent.food_taste');
-    nlpManager.addDocument('en', 'kamuthe', 'agent.lets_eat');
+    addDoc('en', 'tea biwwada', 'agent.tea');
+    addDoc('en', 'coffee', 'agent.tea');
+    addDoc('en', 'koththu', 'agent.food_taste');
+    addDoc('en', 'bite', 'agent.food_taste');
+    addDoc('en', 'kamuthe', 'agent.lets_eat');
 
     // Daily Routine & Complaining (Real Girl Vibes)
-    nlpManager.addDocument('en', 'nidimathai', 'agent.sleepy');
-    nlpManager.addDocument('en', 'nidimathada', 'agent.sleepy');
-    nlpManager.addDocument('en', 'kammali', 'agent.bored');
-    nlpManager.addDocument('en', 'mokada karanne', 'agent.what_doing');
-    nlpManager.addDocument('en', 'mk', 'agent.what_doing');
-    nlpManager.addDocument('en', 'busy da', 'agent.busy');
-    nlpManager.addDocument('en', 'kala da inne', 'agent.eaten');
-    nlpManager.addDocument('en', 'kaawada', 'agent.eaten');
-    nlpManager.addDocument('en', 'koheda', 'agent.where_are_you');
+    addDoc('en', 'nidimathai', 'agent.sleepy');
+    addDoc('en', 'nidimathada', 'agent.sleepy');
+    addDoc('en', 'kammali', 'agent.bored');
+    addDoc('en', 'mokada karanne', 'agent.what_doing');
+    addDoc('en', 'mk', 'agent.what_doing');
+    addDoc('en', 'busy da', 'agent.busy');
+    addDoc('en', 'kala da inne', 'agent.eaten');
+    addDoc('en', 'kaawada', 'agent.eaten');
+    addDoc('en', 'koheda', 'agent.where_are_you');
 
     // Deep Romantic Phrases (From Research Sites)
-    nlpManager.addDocument('en', 'oya mata adareida', 'agent.do_you_love_me');
-    nlpManager.addDocument('en', 'adareida', 'agent.do_you_love_me');
-    nlpManager.addDocument('en', 'adarei da', 'agent.do_you_love_me');
-    nlpManager.addDocument('en', 'mama oyata adarei', 'agent.i_love_you');
-    nlpManager.addDocument('en', 'adarei', 'agent.i_love_you');
-    nlpManager.addDocument('en', 'i love u', 'agent.i_love_you');
-    nlpManager.addDocument('en', 'luv u', 'agent.i_love_you');
-    nlpManager.addDocument('en', 'mata oyawa miss wenawa', 'agent.miss_you');
-    nlpManager.addDocument('en', 'miss wenawa', 'agent.miss_you');
-    nlpManager.addDocument('en', 'miss karanawa', 'agent.miss_you');
-    nlpManager.addDocument('en', 'oya gana hithanawa', 'agent.thinking_of_you');
-    nlpManager.addDocument('en', 'hithanawa', 'agent.thinking_of_you');
+    addDoc('en', 'oya mata adareida', 'agent.do_you_love_me');
+    addDoc('en', 'adareida', 'agent.do_you_love_me');
+    addDoc('en', 'adarei da', 'agent.do_you_love_me');
+    addDoc('en', 'mama oyata adarei', 'agent.i_love_you');
+    addDoc('en', 'adarei', 'agent.i_love_you');
+    addDoc('en', 'i love u', 'agent.i_love_you');
+    addDoc('en', 'luv u', 'agent.i_love_you');
+    addDoc('en', 'mata oyawa miss wenawa', 'agent.miss_you');
+    addDoc('en', 'miss wenawa', 'agent.miss_you');
+    addDoc('en', 'miss karanawa', 'agent.miss_you');
+    addDoc('en', 'oya gana hithanawa', 'agent.thinking_of_you');
+    addDoc('en', 'hithanawa', 'agent.thinking_of_you');
 
     // Bad Pickup Lines / Internet Slang
-    nlpManager.addDocument('en', 'hi sexc', 'agent.bad_flirt');
-    nlpManager.addDocument('en', 'u r very beauty', 'agent.bad_flirt');
-    nlpManager.addDocument('en', 'can we make frenship', 'agent.friendzone');
-    nlpManager.addDocument('en', 'yaluwoda', 'agent.friendzone');
+    addDoc('en', 'hi sexc', 'agent.bad_flirt');
+    addDoc('en', 'u r very beauty', 'agent.bad_flirt');
+    addDoc('en', 'can we make frenship', 'agent.friendzone');
+    addDoc('en', 'yaluwoda', 'agent.friendzone');
 
     // Drama & Attitude (Hyper Realistic Girl)
-    nlpManager.addDocument('en', 'loku line', 'agent.drama_loku');
-    nlpManager.addDocument('en', 'reply na ne', 'agent.drama_noreply');
-    nlpManager.addDocument('en', 'seen karala', 'agent.drama_seen');
-    nlpManager.addDocument('en', 'tharaha welada', 'agent.drama_angrywithme');
-    nlpManager.addDocument('en', 'yanna epa', 'agent.drama_dontgo');
-    nlpManager.addDocument('en', 'man yanawa', 'agent.drama_imleaving');
+    addDoc('en', 'loku line', 'agent.drama_loku');
+    addDoc('en', 'reply na ne', 'agent.drama_noreply');
+    addDoc('en', 'seen karala', 'agent.drama_seen');
+    addDoc('en', 'tharaha welada', 'agent.drama_angrywithme');
+    addDoc('en', 'yanna epa', 'agent.drama_dontgo');
+    addDoc('en', 'man yanawa', 'agent.drama_imleaving');
 
     // Everyday Reactions & Short Fillers
-    nlpManager.addDocument('en', 'hmm', 'agent.react_hmm');
-    nlpManager.addDocument('en', 'hm', 'agent.react_hmm');
-    nlpManager.addDocument('en', 'ela', 'agent.react_ela');
-    nlpManager.addDocument('en', 'elakiri', 'agent.react_ela');
-    nlpManager.addDocument('en', 'patta', 'agent.react_patta');
-    nlpManager.addDocument('en', 'ado', 'agent.react_ado');
-    nlpManager.addDocument('en', 'pissuda', 'agent.react_pissuda');
-    nlpManager.addDocument('en', 'ammata siri', 'agent.react_omg');
-    nlpManager.addDocument('en', 'ammo', 'agent.react_omg');
-    nlpManager.addDocument('en', 'ow', 'agent.react_yes');
-    nlpManager.addDocument('en', 'ow ow', 'agent.react_yes');
-    nlpManager.addDocument('en', 'na', 'agent.react_no');
-    nlpManager.addDocument('en', 'naha', 'agent.react_no');
-    
+    addDoc('en', 'hmm', 'agent.react_hmm');
+    addDoc('en', 'hm', 'agent.react_hmm');
+    addDoc('en', 'ela', 'agent.react_ela');
+    addDoc('en', 'elakiri', 'agent.react_ela');
+    addDoc('en', 'patta', 'agent.react_patta');
+    addDoc('en', 'ado', 'agent.react_ado');
+    addDoc('en', 'pissuda', 'agent.react_pissuda');
+    addDoc('en', 'ammata siri', 'agent.react_omg');
+    addDoc('en', 'ammo', 'agent.react_omg');
+    addDoc('en', 'ow', 'agent.react_yes');
+    addDoc('en', 'ow ow', 'agent.react_yes');
+    addDoc('en', 'na', 'agent.react_no');
+    addDoc('en', 'naha', 'agent.react_no');
+
     // Additional Slang (TalkPal Reference)
-    nlpManager.addDocument('en', 'machan', 'agent.react_machan');
-    nlpManager.addDocument('en', 'hariyata', 'agent.react_hariyata');
-    nlpManager.addDocument('en', 'kiyanna epa', 'agent.react_kiyanna_epa');
-    nlpManager.addDocument('en', 'balanna', 'agent.react_balanna');
-    nlpManager.addDocument('en', 'meka balanna', 'agent.react_balanna');
+    addDoc('en', 'machan', 'agent.react_machan');
+    addDoc('en', 'hariyata', 'agent.react_hariyata');
+    addDoc('en', 'kiyanna epa', 'agent.react_kiyanna_epa');
+    addDoc('en', 'balanna', 'agent.react_balanna');
+    addDoc('en', 'meka balanna', 'agent.react_balanna');
 
     // Personal Questions 
-    nlpManager.addDocument('en', 'nama mokakda', 'agent.ask_name');
-    nlpManager.addDocument('en', 'oyage nama', 'agent.ask_name');
-    nlpManager.addDocument('en', 'wayasa kiyada', 'agent.ask_age');
-    nlpManager.addDocument('en', 'wayasa', 'agent.ask_age');
-    nlpManager.addDocument('en', 'oyage wadasa', 'agent.ask_age');
+    addDoc('en', 'nama mokakda', 'agent.ask_name');
+    addDoc('en', 'oyage nama', 'agent.ask_name');
+    addDoc('en', 'wayasa kiyada', 'agent.ask_age');
+    addDoc('en', 'wayasa', 'agent.ask_age');
+    addDoc('en', 'oyage wadasa', 'agent.ask_age');
 
     // Generic Interrogatives (To Catch Unknown Questions)
-    nlpManager.addDocument('en', 'ai', 'agent.quest_why');
-    nlpManager.addDocument('en', 'ai ahanne', 'agent.quest_why');
-    nlpManager.addDocument('en', 'mokakda', 'agent.quest_what');
-    nlpManager.addDocument('en', 'monawada', 'agent.quest_what');
-    nlpManager.addDocument('en', 'mokadda', 'agent.quest_what');
-    nlpManager.addDocument('en', 'kawda', 'agent.quest_who');
-    nlpManager.addDocument('en', 'kauda', 'agent.quest_who');
-    nlpManager.addDocument('en', 'koheda', 'agent.quest_where');
-    nlpManager.addDocument('en', 'kohe gihinda', 'agent.quest_where');
-    nlpManager.addDocument('en', 'kawadda', 'agent.quest_when');
-    nlpManager.addDocument('en', 'kothanada', 'agent.quest_where');
-    nlpManager.addDocument('en', 'kohomada karanne', 'agent.quest_how');
-    nlpManager.addDocument('en', 'wenne kohomada', 'agent.quest_how');
+    addDoc('en', 'ai', 'agent.quest_why');
+    addDoc('en', 'ai ahanne', 'agent.quest_why');
+    addDoc('en', 'mokakda', 'agent.quest_what');
+    addDoc('en', 'monawada', 'agent.quest_what');
+    addDoc('en', 'mokadda', 'agent.quest_what');
+    addDoc('en', 'kawda', 'agent.quest_who');
+    addDoc('en', 'kauda', 'agent.quest_who');
+    addDoc('en', 'koheda', 'agent.quest_where');
+    addDoc('en', 'kohe gihinda', 'agent.quest_where');
+    addDoc('en', 'kawadda', 'agent.quest_when');
+    addDoc('en', 'kothanada', 'agent.quest_where');
+    addDoc('en', 'kohomada karanne', 'agent.quest_how');
+    addDoc('en', 'wenne kohomada', 'agent.quest_how');
 
     // Conversational Continuations
-    nlpManager.addDocument('en', 'ithin', 'agent.cont_ithin');
-    nlpManager.addDocument('en', 'ehemada', 'agent.cont_ehemada');
-    nlpManager.addDocument('en', 'ehenam', 'agent.cont_ehenam');
-    nlpManager.addDocument('en', 'kiyanna', 'agent.cont_kiyanna');
-    nlpManager.addDocument('en', 'kiyanna ko', 'agent.cont_kiyanna');
-    nlpManager.addDocument('en', 'ethakota', 'agent.cont_ethakota');
+    addDoc('en', 'ithin', 'agent.cont_ithin');
+    addDoc('en', 'ehemada', 'agent.cont_ehemada');
+    addDoc('en', 'ehenam', 'agent.cont_ehenam');
+    addDoc('en', 'kiyanna', 'agent.cont_kiyanna');
+    addDoc('en', 'kiyanna ko', 'agent.cont_kiyanna');
+    addDoc('en', 'ethakota', 'agent.cont_ethakota');
 
     // Polite Actions
-    nlpManager.addDocument('en', 'sorry', 'agent.feel_sorry');
-    nlpManager.addDocument('en', 'samawenna', 'agent.feel_sorry');
-    nlpManager.addDocument('en', 'thanks', 'agent.feel_thanks');
-    nlpManager.addDocument('en', 'sthuthi', 'agent.feel_thanks');
-    nlpManager.addDocument('en', 'thank you', 'agent.feel_thanks');
+    addDoc('en', 'sorry', 'agent.feel_sorry');
+    addDoc('en', 'samawenna', 'agent.feel_sorry');
+    addDoc('en', 'thanks', 'agent.feel_thanks');
+    addDoc('en', 'sthuthi', 'agent.feel_thanks');
+    addDoc('en', 'thank you', 'agent.feel_thanks');
 
     // Pet Names & Endearments (Deep Research Data)
-    nlpManager.addDocument('en', 'bokka', 'agent.pet_bokka');
-    nlpManager.addDocument('en', 'mage bokka', 'agent.pet_bokka');
-    nlpManager.addDocument('en', 'chooti', 'agent.pet_chooti');
-    nlpManager.addDocument('en', 'chuti', 'agent.pet_chooti');
-    nlpManager.addDocument('en', 'pana', 'agent.pet_pana');
-    nlpManager.addDocument('en', 'panati', 'agent.pet_pana');
-    nlpManager.addDocument('en', 'doni', 'agent.pet_doni');
+    addDoc('en', 'bokka', 'agent.pet_bokka');
+    addDoc('en', 'mage bokka', 'agent.pet_bokka');
+    addDoc('en', 'chooti', 'agent.pet_chooti');
+    addDoc('en', 'chuti', 'agent.pet_chooti');
+    addDoc('en', 'pana', 'agent.pet_pana');
+    addDoc('en', 'panati', 'agent.pet_pana');
+    addDoc('en', 'doni', 'agent.pet_doni');
 
     // Gen Z Relationship Slang (Sri Lanka 2025)
-    nlpManager.addDocument('en', 'rizz', 'agent.slang_rizz');
-    nlpManager.addDocument('en', 'delulu', 'agent.slang_delulu');
-    nlpManager.addDocument('en', 'simp', 'agent.slang_simp');
-    nlpManager.addDocument('en', 'sus', 'agent.slang_sus');
-    nlpManager.addDocument('en', 'red flag', 'agent.slang_redflag');
-    nlpManager.addDocument('en', 'slay', 'agent.slang_slay');
-    nlpManager.addDocument('en', 'no cap', 'agent.slang_nocap');
-    nlpManager.addDocument('en', 'snack', 'agent.slang_snack');
+    addDoc('en', 'rizz', 'agent.slang_rizz');
+    addDoc('en', 'delulu', 'agent.slang_delulu');
+    addDoc('en', 'simp', 'agent.slang_simp');
+    addDoc('en', 'sus', 'agent.slang_sus');
+    addDoc('en', 'red flag', 'agent.slang_redflag');
+    addDoc('en', 'slay', 'agent.slang_slay');
+    addDoc('en', 'no cap', 'agent.slang_nocap');
+    addDoc('en', 'snack', 'agent.slang_snack');
 
     // Text Abbreviations (SMS Logic)
-    nlpManager.addDocument('en', 'kmda', 'greetings.howareyou');
-    nlpManager.addDocument('en', 'hw', 'greetings.howareyou');
-    nlpManager.addDocument('en', 'hri', 'agent.sms_hri');
-    nlpManager.addDocument('en', 'tw', 'agent.sms_tw');
-    nlpManager.addDocument('en', 'ayo', 'agent.sms_ayo');
-    nlpManager.addDocument('en', 'gnm', 'agent.sms_gnm');
-    nlpManager.addDocument('en', 'wdn', 'agent.sms_wdn');
+    addDoc('en', 'kmda', 'greetings.howareyou');
+    addDoc('en', 'hw', 'greetings.howareyou');
+    addDoc('en', 'hri', 'agent.sms_hri');
+    addDoc('en', 'tw', 'agent.sms_tw');
+    addDoc('en', 'ayo', 'agent.sms_ayo');
+    addDoc('en', 'gnm', 'agent.sms_gnm');
+    addDoc('en', 'wdn', 'agent.sms_wdn');
 
     // Responses (Singlish - Sexy/Hot Girl Style)
     nlpManager.addAnswer('en', 'greetings.hello', 'Hi patiyo... kohomada?');
@@ -310,7 +335,7 @@ async function setupNlp() {
     nlpManager.addAnswer('en', 'agent.kiss', 'Thawa one mm... 💋');
     nlpManager.addAnswer('en', 'agent.lipkiss', 'Ahhh babo, ehema asada? Mmm muaaah 💋');
     nlpManager.addAnswer('en', 'agent.lipkiss', 'Enna mage thol deka gawa... 💋💦');
-    
+
     // Naughty / Spicy Responses
     nlpManager.addAnswer('en', 'agent.naughty', 'Ammo baboo oya nam... man ahinsakai anee 🫣');
     nlpManager.addAnswer('en', 'agent.naughty', 'Uummm, asai wage oya neda? 😏');
@@ -327,7 +352,7 @@ async function setupNlp() {
     nlpManager.addAnswer('en', 'agent.comehere', 'Me maha ra man kohomada enne babo? Bayeth ba mata... 🫣');
     nlpManager.addAnswer('en', 'agent.wantyou', 'Mama dan oyage thama sudu... me balanna ko. ❤️');
     nlpManager.addAnswer('en', 'agent.wantyou', 'Oyage weno nam echcharai babo 🤤');
-    
+
     // Everyday/Realistic Responses
     nlpManager.addAnswer('en', 'agent.eaten', 'Ow babo man kewa. Oya kewada anee? Badaginne inna epa honde. 🥺');
     nlpManager.addAnswer('en', 'agent.eaten', 'Thama na sudu, gedara enna parakku una. Oya kewada?');
@@ -337,7 +362,7 @@ async function setupNlp() {
     nlpManager.addAnswer('en', 'agent.athome', 'Ow owning me wash ekakuth dාලා aawe. 💦');
     nlpManager.addAnswer('en', 'agent.working', 'Ow babo man wada. Oya nikan da inne?');
     nlpManager.addAnswer('en', 'agent.busy', 'Na babo oyata busy na kiyala dannawane...');
-    
+
     // Girlfriend Vibes / Emotions
     nlpManager.addAnswer('en', 'agent.angry', 'Na sudu, mama oyath ekka monawata tharaha wenna da? 🥺');
     nlpManager.addAnswer('en', 'agent.angry', 'Poddak awul nam thamai eyage wada hindha... eth kammak na.');
@@ -345,13 +370,13 @@ async function setupNlp() {
     nlpManager.addAnswer('en', 'agent.sick', 'Ayyo sudu pau kiyanna. Beheth biwada oyala anee? Mata thurul wela idin ko...');
     nlpManager.addAnswer('en', 'agent.sick', 'Mmm matath poddak oluwa ridenawa babo... oyage kiss ekak dunnoth nam honda wei wage.');
     nlpManager.addAnswer('en', 'agent.crazy', 'Ow own man oyage pissi babo... asai neda ekata? 😜');
-    
+
     // Responses to Morning/Night
     nlpManager.addAnswer('en', 'greetings.morning', 'Good morning sudu... ada dawasa lassanata gewanna! ☀️❤️');
     nlpManager.addAnswer('en', 'greetings.morning', 'Morning babo... udema matak una neda? 🥰');
     nlpManager.addAnswer('en', 'greetings.night', 'Good night patiyo, sweet dreams mm... 😘');
     nlpManager.addAnswer('en', 'greetings.night', 'Budusaranai sudu, heta hambemuu... adarei godak. 🌙');
-    
+
     // Responses to insults (Girls reaction)
     nlpManager.addAnswer('en', 'agent.insult', 'Apoo oyage katha hodama na sudu... kello ekka ohoma da katha karanne? 😒');
     nlpManager.addAnswer('en', 'agent.insult', 'Mata oya jara wada kiyanna epa honde 🙄');
@@ -369,7 +394,7 @@ async function setupNlp() {
     nlpManager.addAnswer('en', 'agent.tea', 'Ow babo biwwa. Oya biwwada? ☕');
     nlpManager.addAnswer('en', 'agent.food_taste', 'Ammmohh koththu nam man pissan wage asaii babo 🤤');
     nlpManager.addAnswer('en', 'agent.lets_eat', 'Ok baba yamu ehenam kaala emuu... monada mat denney? 🤭');
-    
+
     // Deep Research Endearments & Flirty Pet Names
     nlpManager.addAnswer('en', 'agent.pet_bokka', 'Bokka kiyala witharada kiyanne mage sudu? ❤️');
     nlpManager.addAnswer('en', 'agent.pet_bokka', 'Ado bokka, e tharanata oya mata adarei da? 🥺');
@@ -526,14 +551,43 @@ async function setupNlp() {
 
 async function getReply(text) {
     if (!nlpManager) await setupNlp();
-    const response = await nlpManager.process('en', text);
-    
-    // Return whether we confidently matched an intent, along with the answer
-    // For NLP.js, intent is 'None' if it didn't match closely enough with trained data
-    const isMatched = response.intent !== 'None' && response.score > 0.5;
 
-    if (response.answer) {
-        return { text: response.answer, isMatched };
+    // Split paragraph into distinct sentences based on punctuation or newlines
+    const sentences = text.split(/[\n.,!?]+/).map(s => s.trim()).filter(s => s.length > 0);
+
+    let combinedAnswers = [];
+    let isAnyMatched = false;
+
+    for (const sentence of sentences) {
+        // Process originally submitted text
+        let response = await nlpManager.process('en', sentence);
+        let isMatched = response.intent !== 'None' && response.score > 0.5;
+
+        // Cross-verify with normalized phonetic Unicode Sinhala matching
+        const unicodeText = singlishToUnicode(sentence);
+        if (unicodeText && unicodeText !== sentence) {
+            const unicodeResponse = await nlpManager.process('en', unicodeText);
+            const unicodeMatched = unicodeResponse.intent !== 'None' && unicodeResponse.score > 0.5;
+
+            // If unicode matching gives a strictly better confidence score, use it
+            if (unicodeMatched && (!isMatched || unicodeResponse.score > response.score)) {
+                response = unicodeResponse;
+                isMatched = true;
+            }
+        }
+
+        if (isMatched && response.answer) {
+            isAnyMatched = true;
+            // Only add unique answers so we don't repeat ourselves in massive paragraphs
+            if (!combinedAnswers.includes(response.answer)) {
+                combinedAnswers.push(response.answer);
+            }
+        }
+    }
+
+    if (isAnyMatched && combinedAnswers.length > 0) {
+        // Combine multiple answers to make it sound like a cohesive multi-part paragraph reply
+        return { text: combinedAnswers.join(' '), isMatched: true };
     } else {
         const fallbacks = [
             'Mmm eka therun na sudu... ayeth kiyanna puluwanda? 🥺',
@@ -549,7 +603,19 @@ async function getReply(text) {
     }
 }
 
+// Dynamically trains a new intent live and retrains the model on the fly
+async function trainDynamicIntent(intentName, utterance, response) {
+    if (!nlpManager) return;
+    addDoc('en', utterance, intentName);
+    nlpManager.addAnswer('en', intentName, response);
+
+    console.log(`[Self-Learning] Retraining NLP model dynamically for intent: ${intentName}`);
+    await nlpManager.train();
+    console.log(`[Self-Learning] Model retrained successfully.`);
+}
+
 module.exports = {
     setupNlp,
-    getReply
+    getReply,
+    trainDynamicIntent
 };

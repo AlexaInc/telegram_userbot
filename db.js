@@ -46,7 +46,30 @@ function recordInteraction(userId, username, groupId, groupTitle) {
             interaction_count=interaction_count+1`, [groupId, groupTitle]);
 }
 
+// Save a newly learned Utterance -> Response pair
+function saveLearnedPair(intentName, utterance, response) {
+    return new Promise((resolve, reject) => {
+        db.run(`INSERT INTO knowledge (intent, utterance, response) VALUES (?, ?, ?)`,
+            [intentName, utterance, response], function (err) {
+                if (err) return reject(err);
+                resolve(this.lastID);
+            });
+    });
+}
+
+// Load all previously learned pairs to inject back into NLP.js on startup
+function loadLearnedKnowledge() {
+    return new Promise((resolve, reject) => {
+        db.all(`SELECT intent, utterance, response FROM knowledge`, [], (err, rows) => {
+            if (err) return reject(err);
+            resolve(rows);
+        });
+    });
+}
+
 module.exports = {
     db,
-    recordInteraction
+    recordInteraction,
+    saveLearnedPair,
+    loadLearnedKnowledge
 };

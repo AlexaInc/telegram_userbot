@@ -10,11 +10,12 @@ const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
 const input = require('input');
-const { setupNlp, getReply } = require('./nlp.js');
-const { db, recordInteraction } = require('./db.js');
+const { setupNlp, getReply, trainDynamicIntent } = require('./nlp.js');
+const { db, recordInteraction, saveLearnedPair } = require('./db.js');
 const http = require('http');
 const net = require('net');
 const url = require('url');
+const { performBackup } = require('./backup.js');
 
 // --- Dummy HTTP Server for Hugging Face Healthcheck ---
 const PROXY_PORT = process.env.PORT || 7860;
@@ -85,6 +86,22 @@ if (process.env.PROXY_URL) {
     client.addEventHandler(async (event) => {
         const message = event.message;
 
+        // --- Owner Commands (DMs) ---
+        if (!event.isGroup && message.text && message.text.toLowerCase() === '/backup') {
+            const senderId = message.senderId?.valueOf()?.toString();
+            const ownerId = process.env.OWNER_ID;
+
+            if (senderId === ownerId) {
+                console.log('[Owner] Received manual /backup command.');
+                await client.sendMessage(message.chatId, { message: '🚀 Starting manual backup to GitHub...' });
+                const result = await performBackup();
+                await client.sendMessage(message.chatId, {
+                    message: result.success ? '✅ Backup completed successfully!' : `❌ Backup failed: ${result.message}`
+                });
+                return;
+            }
+        }
+
         // Constraint 1: ONLY work in groups
         if (!event.isGroup) {
             return;
@@ -93,7 +110,34 @@ if (process.env.PROXY_URL) {
         const textLower = message.text ? message.text.toLowerCase().trim() : '';
         const isGreeting = ['hi', 'hello', 'hey', 'halo', 'ayubowan', 'kohomada'].includes(textLower);
 
-        // Constraint 2: Trigger if it's a specific Reply TO the bot OR if it's a generic greeting
+        // --- Self Learning Feedback Loop ---
+        // If THIS message is a text reply to ANOTHER user's text message, we securely map the Utterance -> Response
+        if (message.isReply && message.text) {
+            try {
+                const repliedMsg = await message.getReplyMessage();
+                // Ensure both messages exist, both are text, and the replied message is from a real user (not a bot)
+                if (repliedMsg && repliedMsg.text && !repliedMsg.out) {
+                    const sender = await repliedMsg.getSender();
+                    if (sender && !sender.bot) {
+                        const utterance = repliedMsg.text.trim();
+                        const response = message.text.trim();
+
+                        // Ignore extremely long paragraphs or 1-word generic replies that might ruin training
+                        if (utterance.length > 3 && utterance.length < 100 && response.length > 2 && response.length < 150) {
+                            console.log(`[Self-Learning] Captured mapping -> Utterance: "${utterance}" | Response: "${response}"`);
+
+                            // Save to SQLite & Train Live
+                            const intentId = `learned.${Date.now()}`;
+                            const savedId = await saveLearnedPair(intentId, utterance, response);
+                            await trainDynamicIntent(intentId, utterance, response);
+                        }
+                    }
+                }
+            } catch (e) { /* Ignore fetch errors */ }
+        }
+        // -----------------------------------
+
+        // Constraint 2: Trigger if it's a specific Reply TO the userbot OR if it's a generic greeting
         let isValidTrigger = false;
 
         if (message.isReply) {
@@ -202,5 +246,11 @@ if (process.env.PROXY_URL) {
     }, new NewMessage({}));
 
     console.log('Userbot listening for replies in groups...');
+
+    // --- Hourly Backup Interval ---
+    setInterval(async () => {
+        console.log('[Interval] Executing 60-minute automated backup...');
+        await performBackup();
+    }, 60 * 60 * 1000); // 60 minutes
 
 })();
