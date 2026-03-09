@@ -11,9 +11,10 @@ const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
 const input = require('input');
-const { setupNlp, getReply, trainDynamicIntent } = require('./nlp.js');
-const { db, recordInteraction, saveLearnedPair, syncLearnedKnowledge } = require('./db.js');
+const { setupNlp, getReply, trainDynamicIntent, trainBatchIntent } = require('./nlp.js');
+const { db, recordInteraction, saveLearnedPair, syncLearnedKnowledge, markAsTrained, loadLearnedKnowledge } = require('./db.js');
 const { performBackup, restoreFromBackup } = require('./backup.js');
+const fs = require('fs');
 const http = require('http');
 const net = require('net');
 const url = require('url');
@@ -103,18 +104,62 @@ if (process.env.PROXY_URL) {
         const message = event.message;
 
         // --- Owner Commands (DMs) ---
-        if (!event.isGroup && message.text && message.text.toLowerCase() === '/backup') {
+        if (!event.isGroup && message.text) {
+            const cmd = message.text.toLowerCase().trim();
             const senderId = message.senderId?.valueOf()?.toString();
             const ownerId = process.env.OWNER_ID;
 
             if (senderId === ownerId) {
-                console.log('[Owner] Received manual /backup command.');
-                await client.sendMessage(message.chatId, { message: '🚀 Starting manual backup to GitHub...' });
-                const result = await performBackup();
-                await client.sendMessage(message.chatId, {
-                    message: result.success ? '✅ Backup completed successfully!' : `❌ Backup failed: ${result.message}`
-                });
-                return;
+                if (cmd === '/backup') {
+                    console.log('[Owner] Received manual /backup command.');
+                    await client.sendMessage(message.chatId, { message: '🚀 Starting manual backup to GitHub...' });
+                    const result = await performBackup();
+                    await client.sendMessage(message.chatId, {
+                        message: result.success ? '✅ Backup completed successfully!' : `❌ Backup failed: ${result.message}`
+                    });
+                    return;
+                }
+
+                if (cmd === '/train') {
+                    console.log('[Owner] Processing /train command...');
+                    const pending = await loadLearnedKnowledge(false, true); // onlyPending = true
+                    if (!pending || pending.length === 0) {
+                        await client.sendMessage(message.chatId, { message: 'ℹ️ No new knowledge captured yet. Keep chatting in groups!' });
+                        return;
+                    }
+
+                    // Create a JSON summary for the owner to review
+                    const jsonContent = JSON.stringify(pending, null, 2);
+                    const buffer = Buffer.from(jsonContent);
+
+                    await client.sendMessage(message.chatId, {
+                        message: `📊 Found ${pending.length} new learned items.\n\nPlease review the attached document and send \`/confirm_train\` if you want to teach these to my AI.`,
+                        file: buffer,
+                        forceDocument: true,
+                    });
+                    return;
+                }
+
+                if (cmd === '/confirm_train') {
+                    console.log('[Owner] Confirming training batch...');
+                    const pending = await loadLearnedKnowledge(false, true);
+                    if (!pending || pending.length === 0) {
+                        await client.sendMessage(message.chatId, { message: '❌ Nothing pending to train.' });
+                        return;
+                    }
+
+                    await client.sendMessage(message.chatId, { message: '⚙️ Retraining AI model with new knowledge... Please wait.' });
+
+                    try {
+                        await trainBatchIntent(pending);
+                        await markAsTrained();
+                        await client.sendMessage(message.chatId, { message: `✅ Successfully trained ${pending.length} new items! I'm now smarter. 😎` });
+                    } catch (err) {
+                        console.error('Batch training failed:', err);
+                        await client.sendMessage(message.chatId, { message: `❌ Training failed: ${err.message}` });
+                    }
+                    return;
+                }
             }
         }
 
@@ -159,10 +204,10 @@ if (process.env.PROXY_URL) {
                         if (utterance.length > 3 && utterance.length < 100 && response.length > 2 && response.length < 150) {
                             console.log(`[Self-Learning] Captured mapping -> Utterance: "${utterance}" | Response: "${response}"`);
 
-                            // Save to SQLite & Train Live
+                            // Save to SQLite (Don't auto-train anymore)
                             const intentId = `learned.${Date.now()}`;
                             const savedId = await saveLearnedPair(intentId, utterance, response);
-                            await trainDynamicIntent(intentId, utterance, response);
+                            // await trainDynamicIntent(intentId, utterance, response); // Removed per user request
                         }
                     }
                 }

@@ -25,9 +25,10 @@ async function setupNlp() {
 
     // --- Dynamic Self-Learning Loop Loader ---
     try {
-        const learnedRows = await loadLearnedKnowledge();
+        // Only load data that has been confirmed/trained by the owner
+        const learnedRows = await loadLearnedKnowledge(true);
         if (learnedRows && learnedRows.length > 0) {
-            console.log(`Loading ${learnedRows.length} User-Taught conversation flows...`);
+            console.log(`Loading ${learnedRows.length} confirmed User-Taught conversation flows...`);
             for (const row of learnedRows) {
                 addDoc('en', row.utterance, row.intent);
                 nlpManager.addAnswer('en', row.intent, row.response);
@@ -604,18 +605,25 @@ async function getReply(text) {
 }
 
 // Dynamically trains a new intent live and retrains the model on the fly
-async function trainDynamicIntent(intentName, utterance, response) {
-    if (!nlpManager) return;
-    addDoc('en', utterance, intentName);
-    nlpManager.addAnswer('en', intentName, response);
-
-    console.log(`[Self-Learning] Retraining NLP model dynamically for intent: ${intentName}`);
+async function trainDynamicIntent(id, utt, ans) {
+    addDoc('en', utt, id);
+    nlpManager.addAnswer('en', id, ans);
     await nlpManager.train();
-    console.log(`[Self-Learning] Model retrained successfully.`);
+}
+
+async function trainBatchIntent(items) {
+    if (!items || items.length === 0) return;
+    for (const item of items) {
+        addDoc('en', item.utterance, item.intent);
+        nlpManager.addAnswer('en', item.intent, item.response);
+    }
+    await nlpManager.train();
+    console.log(`[NLP] Successfully batch trained ${items.length} new items.`);
 }
 
 module.exports = {
     setupNlp,
     getReply,
-    trainDynamicIntent
+    trainDynamicIntent,
+    trainBatchIntent
 };

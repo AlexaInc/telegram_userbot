@@ -28,8 +28,14 @@ function initDb() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         intent TEXT,
         utterance TEXT,
-        response TEXT
+        response TEXT,
+        is_trained INTEGER DEFAULT 0
     )`);
+
+    // Ensure is_trained exists for existing databases
+    db.run(`ALTER TABLE knowledge ADD COLUMN is_trained INTEGER DEFAULT 0`, (err) => {
+        // Ignore error if column already exists
+    });
 }
 
 function recordInteraction(userId, username, groupId, groupTitle) {
@@ -49,7 +55,7 @@ function recordInteraction(userId, username, groupId, groupTitle) {
 // Save a newly learned Utterance -> Response pair
 function saveLearnedPair(intentName, utterance, response) {
     return new Promise((resolve, reject) => {
-        db.run(`INSERT INTO knowledge (intent, utterance, response) VALUES (?, ?, ?)`,
+        db.run(`INSERT INTO knowledge (intent, utterance, response, is_trained) VALUES (?, ?, ?, 0)`,
             [intentName, utterance, response], function (err) {
                 if (err) return reject(err);
                 resolve(this.lastID);
@@ -57,12 +63,26 @@ function saveLearnedPair(intentName, utterance, response) {
     });
 }
 
-// Load all previously learned pairs to inject back into NLP.js on startup
-function loadLearnedKnowledge() {
+// Load previously learned pairs. By default loads all for startup, 
+// but can be filtered for manual training.
+function loadLearnedKnowledge(onlyTrained = false, onlyPending = false) {
     return new Promise((resolve, reject) => {
-        db.all(`SELECT intent, utterance, response FROM knowledge`, [], (err, rows) => {
+        let query = `SELECT intent, utterance, response FROM knowledge`;
+        if (onlyTrained) query += ` WHERE is_trained = 1`;
+        if (onlyPending) query += ` WHERE is_trained = 0`;
+
+        db.all(query, [], (err, rows) => {
             if (err) return reject(err);
             resolve(rows);
+        });
+    });
+}
+
+function markAsTrained() {
+    return new Promise((resolve, reject) => {
+        db.run(`UPDATE knowledge SET is_trained = 1 WHERE is_trained = 0`, (err) => {
+            if (err) return reject(err);
+            resolve();
         });
     });
 }
@@ -93,5 +113,6 @@ module.exports = {
     recordInteraction,
     saveLearnedPair,
     loadLearnedKnowledge,
-    syncLearnedKnowledge
+    syncLearnedKnowledge,
+    markAsTrained
 };
