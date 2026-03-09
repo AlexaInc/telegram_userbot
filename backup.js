@@ -52,4 +52,40 @@ async function performBackup() {
     }
 }
 
-module.exports = { performBackup };
+async function restoreFromBackup() {
+    const token = process.env.GITHUB_TOKEN;
+    const owner = 'AlexaInc';
+    const repo = 'nlpjsbrain';
+    const path = 'knowledge.json';
+
+    if (!token) {
+        console.warn('[Restore] No GITHUB_TOKEN found. Skipping GitHub restore.');
+        return null;
+    }
+
+    const { Octokit } = await import('octokit');
+    const octokit = new Octokit({ auth: token });
+
+    try {
+        console.log('[Restore] Fetching knowledge.json from GitHub...');
+        const { data } = await octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path,
+        });
+
+        const content = Buffer.from(data.content, 'base64').toString();
+        const knowledge = JSON.parse(content);
+        console.log(`[Restore] Successfully fetched ${knowledge.length} items from GitHub.`);
+        return knowledge;
+    } catch (error) {
+        if (error.status === 404) {
+            console.log('[Restore] No knowledge.json found on GitHub. Starting fresh.');
+        } else {
+            console.error('[Restore] Error fetching backup:', error.message);
+        }
+        return null;
+    }
+}
+
+module.exports = { performBackup, restoreFromBackup };

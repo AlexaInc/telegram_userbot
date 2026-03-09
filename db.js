@@ -67,9 +67,31 @@ function loadLearnedKnowledge() {
     });
 }
 
+// Sync learned knowledge from GitHub (bulk insert if not exists)
+function syncLearnedKnowledge(knowledgeArray) {
+    return new Promise((resolve, reject) => {
+        if (!knowledgeArray || !Array.isArray(knowledgeArray)) return resolve();
+
+        const stmt = db.prepare(`INSERT INTO knowledge (intent, utterance, response) 
+                                 SELECT ?, ?, ? 
+                                 WHERE NOT EXISTS (SELECT 1 FROM knowledge WHERE intent = ?)`);
+
+        db.serialize(() => {
+            knowledgeArray.forEach(item => {
+                stmt.run(item.intent, item.utterance, item.response, item.intent);
+            });
+            stmt.finalize((err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
+    });
+}
+
 module.exports = {
     db,
     recordInteraction,
     saveLearnedPair,
-    loadLearnedKnowledge
+    loadLearnedKnowledge,
+    syncLearnedKnowledge
 };

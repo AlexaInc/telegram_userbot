@@ -11,11 +11,11 @@ const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
 const input = require('input');
 const { setupNlp, getReply, trainDynamicIntent } = require('./nlp.js');
-const { db, recordInteraction, saveLearnedPair } = require('./db.js');
+const { db, recordInteraction, saveLearnedPair, syncLearnedKnowledge } = require('./db.js');
+const { performBackup, restoreFromBackup } = require('./backup.js');
 const http = require('http');
 const net = require('net');
 const url = require('url');
-const { performBackup } = require('./backup.js');
 
 // --- Dummy HTTP Server for Hugging Face Healthcheck ---
 const PROXY_PORT = process.env.PORT || 7860;
@@ -58,6 +58,19 @@ if (process.env.PROXY_URL) {
 
 (async () => {
     console.log('Starting NLP setup...');
+
+    // --- GitHub Knowledge Restoration ---
+    try {
+        const backupKnowledge = await restoreFromBackup();
+        if (backupKnowledge) {
+            console.log(`[Startup] Syncing ${backupKnowledge.length} items from GitHub to Local SQLite...`);
+            await syncLearnedKnowledge(backupKnowledge);
+        }
+    } catch (err) {
+        console.error('[Startup] Failed to restore from GitHub:', err.message);
+    }
+    // ------------------------------------
+
     await setupNlp();
 
     console.log('Loading interactive Telegram Client...');
@@ -78,9 +91,11 @@ if (process.env.PROXY_URL) {
         onError: (err) => console.log(err),
     });
 
-    console.log('You should now be connected.');
-    console.log('Save this string session to your config/env to avoid logging in again:');
     console.log(client.session.save());
+
+    const me = await client.getMe();
+    const myId = me.id.valueOf().toString();
+    console.log(`Bot ID cached: ${myId}`);
 
     // Main Message Handler
     client.addEventHandler(async (event) => {
@@ -107,9 +122,12 @@ if (process.env.PROXY_URL) {
             return;
         }
 
-        // Special check: If it's a channel but NOT a megagroup (e.g. broadcast), skip it
         const chat = await message.getChat();
+        console.log(`[Event] Received message in ${event.isChannel ? 'Megagroup/Channel' : 'Group'}: ${chat?.title || 'Unknown'}`);
+
+        // Special check: If it's a channel but NOT a megagroup (e.g. broadcast), skip it
         if (event.isChannel && chat && !chat.megagroup) {
+            console.log('[Event] Ignoring broadcast channel.');
             return;
         }
 
@@ -149,8 +167,6 @@ if (process.env.PROXY_URL) {
         if (message.isReply) {
             const repliedMsg = await message.getReplyMessage();
             if (repliedMsg) {
-                const me = await client.getMe();
-                const myId = me.id.valueOf().toString();
                 const repliedSenderId = repliedMsg.senderId?.valueOf()?.toString();
 
                 // Check if the replied message was sent by the userbot
@@ -169,7 +185,7 @@ if (process.env.PROXY_URL) {
 
         // Valid trigger!
         const sender = await message.getSender();
-        chat = await message.getChat();
+        // chat is already defined and fetched above at line 111 (for Megagroup check)
 
         // Save interactions to SQLite
         const username = sender?.username || sender?.firstName || 'Unknown';
