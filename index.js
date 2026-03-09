@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // Apply global proxy to generic Node.js HTTP/HTTPS requests
 if (process.env.PROXY_URL) {
@@ -122,17 +123,25 @@ if (process.env.PROXY_URL) {
             return;
         }
 
-        const chat = await message.getChat();
+        let chat;
+        try {
+            chat = await message.getChat();
+        } catch (e) {
+            console.log('[Event] Could not fetch chat details, skipping.');
+            return;
+        }
+
         console.log(`[Event] Received message in ${event.isChannel ? 'Megagroup/Channel' : 'Group'}: ${chat?.title || 'Unknown'}`);
 
         // Special check: If it's a channel but NOT a megagroup (e.g. broadcast), skip it
-        if (event.isChannel && chat && !chat.megagroup) {
-            console.log('[Event] Ignoring broadcast channel.');
+        if (event.isChannel && chat && chat.className !== 'Chat' && !chat.megagroup) {
+            console.log(`[Event] Ignoring broadcast channel: ${chat?.title}`);
             return;
         }
 
         const textLower = message.text ? message.text.toLowerCase().trim() : '';
-        const isGreeting = ['hi', 'hello', 'hey', 'halo', 'ayubowan', 'kohomada'].includes(textLower);
+        const greetingList = ['hi', 'hello', 'hey', 'halo', 'ayubowan', 'kohomada', 'mchn', 'machan', 'oii', 'oi', 'ado', 'bro'];
+        const isGreeting = greetingList.includes(textLower);
 
         // --- Self Learning Feedback Loop ---
         // If THIS message is a text reply to ANOTHER user's text message, we securely map the Utterance -> Response
@@ -180,6 +189,9 @@ if (process.env.PROXY_URL) {
         }
 
         if (!isValidTrigger) {
+            if (isGreeting) {
+                console.log(`[Event] Detected greeting "${message.text}" but not a valid trigger (not a reply to me). Ignoring.`);
+            }
             return; // Ignore messages that aren't replies to us, unless it's a generic greeting
         }
 
