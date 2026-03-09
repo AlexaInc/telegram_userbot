@@ -102,8 +102,14 @@ if (process.env.PROXY_URL) {
             }
         }
 
-        // Constraint 1: ONLY work in groups
-        if (!event.isGroup) {
+        // Constraint 1: ONLY work in groups (including Megagroups which are Channels in GramJS)
+        if (!event.isGroup && !event.isChannel) {
+            return;
+        }
+
+        // Special check: If it's a channel but NOT a megagroup (e.g. broadcast), skip it
+        const chat = await message.getChat();
+        if (event.isChannel && chat && !chat.megagroup) {
             return;
         }
 
@@ -143,14 +149,13 @@ if (process.env.PROXY_URL) {
         if (message.isReply) {
             const repliedMsg = await message.getReplyMessage();
             if (repliedMsg) {
+                const me = await client.getMe();
+                const myId = me.id.valueOf().toString();
+                const repliedSenderId = repliedMsg.senderId?.valueOf()?.toString();
+
                 // Check if the replied message was sent by the userbot
-                if (repliedMsg.out) {
+                if (repliedMsg.out || repliedSenderId === myId) {
                     isValidTrigger = true;
-                } else {
-                    const me = await client.getMe();
-                    if (repliedMsg.senderId && repliedMsg.senderId.valueOf() === me.id.valueOf()) {
-                        isValidTrigger = true;
-                    }
                 }
             }
         } else if (isGreeting) {
@@ -164,7 +169,7 @@ if (process.env.PROXY_URL) {
 
         // Valid trigger!
         const sender = await message.getSender();
-        const chat = await message.getChat();
+        chat = await message.getChat();
 
         // Save interactions to SQLite
         const username = sender?.username || sender?.firstName || 'Unknown';
